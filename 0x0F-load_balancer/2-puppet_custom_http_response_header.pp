@@ -1,30 +1,52 @@
-# Setup New Ubuntu server with nginx
-# and add a custom HTTP header
-
-exec { 'update system':
-        command => '/usr/bin/apt-get update',
+# Install and configure haproxy
+class { 'haproxy':
+  global_options => {
+    'log' => '127.0.0.1 local0 notice',
+    'maxconn' => '2000',
+    'user' => 'haproxy',
+    'group' => 'haproxy',
+  },
+  defaults_options => {
+    'log' => 'global',
+    'mode' => 'http',
+    'option' => ['httplog', 'dontlognull'],
+    'retries' => '3',
+    'timeout connect' => '5000',
+    'timeout client' => '10000',
+    'timeout server' => '10000',
+  },
 }
 
-package { 'nginx':
-	ensure => 'installed',
-	require => Exec['update system']
+# Define frontend and backend sections
+haproxy::frontend { 'http-in':
+  ipaddress => '*',
+  ports     => '80',
+  options   => {
+    # Set custom HTTP header with hostname of nginx server
+    http-request => "set-header X-Served-By % [ssl_fc_sni]",
+    default_backend => "webservers",
+  },
 }
 
-file {'/var/www/html/index.html':
-	content => 'Hello World!'
+haproxy::backend { 'webservers':
+  options   => {
+    balance     => "roundrobin",
+  },
 }
 
-exec {'redirect_me':
-	command => 'sed -i "24i\	rewrite ^/redirect_me https://th3-gr00t.tk/ permanent;" /etc/nginx/sites-available/default',
-	provider => 'shell'
+# Add web servers to backend section
+haproxy::balancermember { "web-01":
+  listening_service => "webservers",
+  server_names      => "web-01",
+  ipaddresses       => "34.227.101.223",
+  ports             => "80",
+  options           => "check",
 }
 
-exec {'HTTP header':
-	command => 'sed -i "25i\	add_header X-Served-By \$hostname;" /etc/nginx/sites-available/default',
-	provider => 'shell'
-}
-
-service {'nginx':
-	ensure => running,
-	require => Package['nginx']
+haproxy::balancermember { "web-02":
+  listening_service => "webservers",
+  server_names      => "web-02",
+  ipaddresses       => "54.162.236.122",
+  ports             => "80",
+  options           => "check",
 }
