@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# takes in domain and subdomain parameters and queries a DNS server to get record type and ip it points to
+audit_subdomain() {
+	domain=$1
+  	subdomain=$2
+
+	output=$(dig +short $subdomain.$domain | awk -v subd=$subdomain -v dom=$domain '
+    # If the record is an IP address, it is an A record
+    /^[0-9.]+$/ {print "The subdomain " subd "." dom " is a A record and points to " $1}
+    # If the record is a domain name, it is a CNAME record
+    /^[a-zA-Z.-]+$/ {print "The subdomain " subd "." dom " is a CNAME record and points to " $1}
+  ')
+
+  	echo "$output"
+}
+
+if [ -z "$2" ]; then
+	audit_subdomain $1 www
+	audit_subdomain $1 lb-01
+	audit_subdomain $1 web-01
+	audit_subdomain $1 web-02
+else
+	audit_subdomain $1 $2
+fi

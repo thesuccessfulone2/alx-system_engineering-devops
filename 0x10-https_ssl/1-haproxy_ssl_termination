@@ -1,0 +1,26 @@
+global
+    log 127.0.0.1 local0 notice
+    maxconn 2000
+    user haproxy
+    group haproxy
+
+defaults
+    log global
+    mode http
+    option httplog
+    option dontlognull
+    retries 3
+    option redispatch
+    timeout connect 5000
+    timeout client 10000
+    timeout server 10000
+
+frontend www.mb-bnb.tech
+    bind *:80
+    bind *:443 ssl crt /etc/ssl/certs/www.mb-bnb.tech
+    default_backend webservers
+
+backend webservers
+    balance roundrobin
+    server web-01 34.227.101.223:80 check
+    server web-02 54.162.236.122:80 check
