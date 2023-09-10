@@ -1,38 +1,62 @@
 #!/usr/bin/env bash
-# Installs, configures, and starts the load balancer
-# Update package lists
-sudo apt-get update
+# install load balancer
 
-# Install HAProxy
-sudo apt-get install haproxy -y
+# colors
+blue='\e[1;34m'
+brown='\e[0;33m'
+green='\e[1;32m'
+reset='\033[0m'
 
-# Configure HAProxy
-sudo tee /etc/haproxy/haproxy.cfg > /dev/null <<EOT
-global
-    daemon
-    maxconn 256
+echo -e "${blue}Updating and doing some minor checks...${reset}\n"
 
+function install() {
+	command -v "$1" &> /dev/null
+
+	#shellcheck disable=SC2181
+	if [ $? -ne 0 ]; then
+		echo -e "	Installing: ${brown}$1${reset}\n"
+		sudo apt-get update -y -qq && \
+			sudo apt-get install -y "$1" -qq
+		echo -e "\n"
+	else
+		echo -e "	${green}${1} is already installed.${reset}\n"
+	fi
+}
+
+install haproxy #install haproxy
+
+echo -e "\n${blue}Setting up some minor stuff.${reset}\n"
+
+# backup default server config file
+sudo cp /etc/haproxy/haproxy.cfg haproxy_default.backup
+
+server_config=\
+"
 defaults
-    mode http
-    timeout connect 5000ms
-    timeout client 50000ms
-    timeout server 50000ms
+  mode http
+  timeout client 15s
+  timeout connect 10s
+  timeout server 15s
+  timeout http-request 10s
 
-frontend http_front
+frontend th3gr00t-tech-frontend
     bind *:80
-    default_backend http_back
+    default_backend th3gr00t-tech-backend
 
-backend http_back
+backend th3gr00t-tech-backend
     balance roundrobin
-    server web-01 100.26.225.174:80 check
-    server web-02 18.209.224.170:80 check
-EOT
+    server 453-web-01 35.243.128.200:80 check
+    server 453-web-02 3.239.120.96:80 check
+"
 
-# Test HAProxy configuration
-sudo haproxy -c -f /etc/haproxy/haproxy.cfg
+# shellcheck disable=SC2154
+echo "$server_config" | sudo dd status=none of=/etc/haproxy/haproxy.cfg
 
-# Start HAProxy
-sudo systemctl start haproxy
+# enable haproxy to be started by init script
+echo "ENABLED=1" | sudo dd status=none of=/etc/default/haproxy
 
-# Enable HAProxy to start on boot
-sudo systemctl enable haproxy
+if [ "$(pgrep -c haproxy)" -le 0 ]; then
+	sudo service haproxy start
+else
+	sudo service haproxy restart
+fi
